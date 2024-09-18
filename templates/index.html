@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Grid Box Selection</title>
+    <style>
+        .grid-container {
+            display: grid;
+            gap: 3px;
+            user-select: none;
+        }
+
+        .grid-item {
+            width: 30px;
+            height: 30px;
+            background-color: lightgray;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .selected {
+            background-color: green;
+            color: white;
+        }
+
+        .start-point {
+            background-color: blue;
+            color: white;
+        }
+
+        .end-point {
+            background-color: red;
+            color: white;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+        }
+
+        input[type="number"] {
+            width: 50px;
+        }
+
+        button {
+            padding: 5px 10px;
+        }
+        
+        .matrix-section {
+            margin-top: 20px;
+        }
+        
+        .matrix-container {
+            display: grid;
+            gap: 3px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="controls">
+    <label for="rows">Rows: </label>
+    <input type="number" id="rows" value="10" min="1" max="100">
+    <label for="cols">Columns: </label>
+    <input type="number" id="cols" value="10" min="1" max="100">
+    <button onclick="createGrid()">Create Grid</button>
+    <button onclick="submitMatrix()">Submit Matrix</button>
+</div>
+
+<div class="controls">
+    <button onclick="setStartPoint()">Set Start Point</button>
+    <button onclick="setEndPoint()">Set End Point</button>
+    <button onclick="setWalls()">Set Walls</button> <!-- New Button -->
+</div>
+
+
+<div class="grid-container" id="original-grid">
+    <!-- Dynamically generated grid will be inserted here -->
+</div>
+
+<div class="matrix-section">
+    <h2>Modified Matrix</h2>
+    <div class="matrix-container" id="modified-grid">
+        <!-- Modified grid will be inserted here -->
+    </div>
+</div>
+
+<script>
+    let isDragging = false;
+    let isSelecting = true;
+    let gridData = [];
+    let rows, cols;
+    let startSet = false, endSet = false;
+    let startPoint = null, endPoint = null;
+    const container = document.querySelector('#original-grid');
+    const modifiedContainer = document.querySelector('#modified-grid');
+    let mode = 'select';  // Options: 'select', 'start', 'end'
+
+    function createGrid() {
+        rows = parseInt(document.getElementById('rows').value);
+        cols = parseInt(document.getElementById('cols').value);
+
+        gridData = Array.from({ length: rows }, () => Array(cols).fill(0));
+
+        container.style.gridTemplateColumns = `repeat(${cols}, 30px)`;
+        container.style.gridTemplateRows = `repeat(${rows}, 30px)`;
+
+        modifiedContainer.style.gridTemplateColumns = `repeat(${cols}, 30px)`;
+        modifiedContainer.style.gridTemplateRows = `repeat(${rows}, 30px)`;
+
+        renderGrid(container, gridData);
+    }
+
+    function renderGrid(container, data) {
+        container.innerHTML = '';
+        data.forEach((row, rowIndex) => {
+            row.forEach((value, colIndex) => {
+                const cell = document.createElement('div');
+                cell.classList.add('grid-item');
+                cell.textContent = value;
+                
+                if (value === 2) {
+                    cell.classList.add('start-point');
+                } else if (value === 4) {
+                    cell.classList.add('end-point');
+                } else if (value === 1) {
+                    cell.classList.add('selected');
+                }
+
+                // Add drag event listeners
+                cell.addEventListener('mousedown', () => startDrag(rowIndex, colIndex, cell));
+                cell.addEventListener('mouseenter', () => dragOver(rowIndex, colIndex, cell));
+                cell.addEventListener('mouseup', endDrag);
+                
+                container.appendChild(cell);
+            });
+        });
+
+        // Mouse Up to stop dragging when the mouse is released anywhere
+        document.addEventListener('mouseup', endDrag);
+    }
+
+    function startDrag(rowIndex, colIndex, cell) {
+        isDragging = true;
+        handleCellClick(rowIndex, colIndex, cell);  // Mark the first cell
+    }
+
+    function dragOver(rowIndex, colIndex, cell) {
+        if (isDragging && mode === 'select') {
+            handleCellClick(rowIndex, colIndex, cell);  // Mark cells on drag
+        }
+    }
+
+    function endDrag() {
+        isDragging = false;
+    }
+
+    function handleCellClick(rowIndex, colIndex, cell) {
+        if (mode === 'start') {
+            if (startPoint) {
+                // Reset previous start point
+                gridData[startPoint[0]][startPoint[1]] = 0;
+            }
+            gridData[rowIndex][colIndex] = 2;
+            startPoint = [rowIndex, colIndex];
+            mode = 'select';  // Reset mode after setting start
+        } else if (mode === 'end') {
+            if (endPoint) {
+                // Reset previous end point
+                gridData[endPoint[0]][endPoint[1]] = 0;
+            }
+            gridData[rowIndex][colIndex] = 4;
+            endPoint = [rowIndex, colIndex];
+            mode = 'select';  // Reset mode after setting end
+        } 
+        else if (mode === 'wall') {
+            gridData[rowIndex][colIndex] = 1;  // Set walls as 1
+        }
+        else {
+            toggleCell(rowIndex, colIndex, cell);
+        }
+        renderGrid(container, gridData);
+    }
+
+    function toggleCell(rowIndex, colIndex, cell) {
+        if (gridData[rowIndex][colIndex] !== 2 && gridData[rowIndex][colIndex] !== 4) {  // Prevent selecting start/end points
+            gridData[rowIndex][colIndex] = gridData[rowIndex][colIndex] === 0 ? 1 : 0;
+        }
+        renderGrid(container, gridData);
+    }
+
+    function setStartPoint() {
+        mode = 'start';
+        alert('Click on a cell to set the start point');
+    }
+    
+    function setEndPoint() {
+        mode = 'end';
+        alert('Click on a cell to set the end point');
+    }
+
+    function submitMatrix() {
+        if (!startPoint || !endPoint) {
+            alert('Please set both a start point and an end point before submitting.');
+            return;
+        }
+
+        fetch('/process_matrix', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                matrix: gridData,
+                start: startPoint,
+                end: endPoint
+            }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Modified matrix from backend:', data);
+            renderGrid(modifiedContainer, data);
+            alert('Matrix processed successfully!');
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+    }
+
+    createGrid();
+</script>
+
+</body>
+</html>
